@@ -1,0 +1,14 @@
+{
+  "name": "micro-crawler",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "cheerio": "*",
+    "iconv-lite":"*",
+    "bufferhelper":"*",
+    "mysql":"2.0.0-alpha9"
+  }
+}
