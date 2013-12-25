@@ -188,7 +188,7 @@ function extract(infoPage){
             var base = $("#product-intro");
             if(base){
                 //提取详细数据
-
+                book.url = infoPage;
                 book.bookname = base.find("#name h1").text().substr(0,45);
 
                 base = base.find(".clearfix");

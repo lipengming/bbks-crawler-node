@@ -21,8 +21,8 @@ exports.Save = function(params,handler){
 
     if(params && params.bookname){
 
-        var sql = "insert into tb_book(cover_pic,isbn,outline,press,bookname,price,author) values(?,?,?,?,?,?,?);";
-        var args = [params.cover_pic,params.isbn,params.outline,params.press,params.bookname,params.price,params.author];
+        var sql = "insert into tb_book(cover_pic,isbn,outline,press,bookname,price,author,url) values(?,?,?,?,?,?,?,?);";
+        var args = [params.cover_pic,params.isbn,params.outline,params.press,params.bookname,params.price,params.author,params.url];
 
         var opt = {'sql':sql,'args':args,'handler':handler};
         database.execQuery(opt);
@@ -32,7 +32,7 @@ exports.Save = function(params,handler){
 
 
 exports.BulkSave = function(params,handler){
-    var sql = "insert into tb_book(cover_pic,isbn,outline,press,bookname,price,author) values ?;";
+    var sql = "insert into tb_book(cover_pic,isbn,outline,press,bookname,price,author,url) values ?;";
     var ep = new EventProxy();
 
     var pl = params.length + 1;
@@ -44,7 +44,7 @@ exports.BulkSave = function(params,handler){
             var opt = {'sql':sql,'args':[args],'handler':handler};
             database.execQuery(opt);
         }else{
-            bulkException(params,function(){
+            bulkException(args,function(){
                 console.log("逐个插入....");
             });
             handler(null);
@@ -54,7 +54,7 @@ exports.BulkSave = function(params,handler){
     for(var a=0;a<pl;a++){
         //校验不空且存在
         if(params[a] && params[a].bookname){
-            var data = [params[a].cover_pic,params[a].isbn,params[a].outline,params[a].press,params[a].bookname,params[a].price,params[a].author];
+            var data = [params[a].cover_pic,params[a].isbn,params[a].outline,params[a].press,params[a].bookname,params[a].price,params[a].author,params[a].url];
             // 触发结果事件
             ep.emit('add_params', data);
             //出发事件
@@ -85,7 +85,7 @@ function bulkException(datas,handler){
         if(params && params.bookname){
 
             var sql = "insert into tb_book(cover_pic,isbn,outline,press,bookname,price,author) values(?,?,?,?,?,?,?);";
-            var args = [params.cover_pic,params.isbn,params.outline,params.press,params.bookname,params.price,params.author];
+            var args = [params.cover_pic,params.isbn,params.outline,params.press,params.bookname,params.price,params.author,params.url];
 
             var opt = {'sql':sql,'args':args,'handler':handler};
             database.execQuery(opt);
