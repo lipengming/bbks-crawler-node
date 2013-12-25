@@ -1,10 +1,11 @@
 var cheerio = require('cheerio');
 var http = require('http');
 var fs = require('fs');
-var book  = require('./models/book');
+var bookDao  = require('./models/book');
 var iconv = require('iconv-lite');
 var BufferHelper = require('bufferhelper');
 
+var EventProxy = require('eventproxy');
 var utils = require('./utils');
 
 ////////////////////
@@ -20,6 +21,7 @@ var detail = "http://item.jd.com/16035246.html";
 ////////////////////
 
 var catlog   = [];
+var ep = new EventProxy();
 
 ////////////////////
 //     run        //
@@ -36,10 +38,11 @@ crawler();
  *
  */
 function crawler(){
-//    crawlerCatlog(host);
-	  crawlerCatlog(host);
+      crawlerCatlog(host);
 //    crawlerList(listpage);
 //    console.log(utils.parseNumber("￥19.20"));
+
+
 }
 
 /**
@@ -67,24 +70,23 @@ function crawlerCatlog(startUrl){
 
         });
 
-        //在此处执行操作。。。。。
-//        catlog.forEach(function(item,k){
-//            //console.log(item.link);
-//            crawlerList(item.link);
-//        });
 
-        while(catlog.length > 0){
-            var item = catlog.pop();
-            crawlerList(item.link);
-//            process.nextTick(crawlerList(item.link));
+        ep.tail("classfy-end",function(){
+            //从catlog中取出一则，调下一个类型抓取流程
+            //console.log("next catlog...............");
+            crawlerList(catlog.pop().link);
+        });
 
-            setTimeout(function () {
-                console.log('item.link');
-            }, 2000);
-        }
+        //延迟3s
+        setTimeout(function(){
+            console.log(catlog.length);
+            //首次启动
+            crawlerList(catlog.pop().link);
+        }, 3000);//延时3秒
 
     });
 }
+
 
 /**
  * 抓取list页面
@@ -94,33 +96,80 @@ function crawlerCatlog(startUrl){
  */
 function  crawlerList(catlogpage){
 
-    //抓取当前页面
+    console.log("current catlog......"+catlogpage);
+   //抓取当前页面
    download(catlogpage,function(err,data){
        var $ = cheerio.load(data);
        //抽取本页数据
-       $("#plist").find(".item").each(function(k){
+       var doc = $("#plist").find(".item");
+       doc.each(function(k){
            //抓取一本书
            var link = $(this).find(".info .p-name").find("a").attr('href');
            if(link){
                //解析数据信息，并且入库
                extract(link);
            }
+           //不在此处触发了。。。
+           //ep.emit('extract-page-list');
        });
 
-       //2判断：是否有下一页的链接
-       var pnext = $("#filter .fore1 .pagin").find(".next");
-       if(pnext){
-           //存在下一页信息
-           //递归调用该函数
-           var next = pnext.attr("href");
-           if(next){
-               console.log(next);
-               crawlerList(next);
+       //当该页的数据抓取并入库之后，进行下一页的操作
+       ep.after("extract-page-list",doc.length,function(books){
+
+           if(books.length === 0){
+
+               goNext($);
+
+           }else{
+
+               //先把数据存到数据库！
+               //完成之后，触发翻页事件
+
+               //！！！！！！！！！！！！批量 ！！！！！！！
+               //！！！！！！！！！！！！批量 ！！！！！！！
+               //！！！！！！！！！！！！批量 ！！！！！！！
+               saveData(books,function(results){
+
+                   //hand the result!!!TODO
+                   //触发事件--》翻页
+                   //go-next-page
+                   //console.log("不该执行。。。。");
+                   goNext($);
+               });
+               //！！！！！！！！！！！！批量 ！！！！！！！
+               //！！！！！！！！！！！！批量 ！！！！！！！
            }
-       }
+
+
+           //goNext($);
+
+       });
+
+
    });
 }
 
+/**
+ * 翻下一页
+ * @param doc
+ */
+function goNext(doc){
+
+    //2判断：是否有下一页的链接
+    var pnext = doc("#filter .fore1 .pagin").find(".next");
+    if(pnext){
+        //存在下一页信息
+        //递归调用该函数
+        var next = pnext.attr("href");
+        if(next){
+            crawlerList(next);
+        }else{
+            //console.log("this catlog ended...............");
+            //发射结束事件
+            ep.emit("classfy-end");
+        }
+    }
+}
 
 /**
  * 数据详细页面
@@ -128,16 +177,15 @@ function  crawlerList(catlogpage){
  */
 function extract(infoPage){
 
-    console.log("extract link:"+infoPage);
-
     download(infoPage,function(err,data){
+
+        var book = {};
         if(!err){
             var $ =  cheerio.load(data);
 
             var base = $("#product-intro");
             if(base){
-                //提取数据
-                var book = {};
+                //提取详细数据
 
                 book.bookname = base.find("#name h1").text().substr(0,45);
 
@@ -149,16 +197,24 @@ function extract(infoPage){
                 book.price = utils.parseNumber(base.find("#summary-price .dd strong").text().substr(1));
                 book.outline  = $("#product-detail .sub-m .sub-mc .con").text().substr(0,2000);
 
-                if(book.bookname && book.isbn){
-                    saveData(book);
-                }
-                else{
-                    //将该链接保存到日志
-                    saveLog(infoPage,"link");
-                    return null;
-                }
+                //非批量！！！！！！！！
+                // 先不校验，直接触发
+
+//                if(book.bookname){
+//                    bookDao.Save(book,function(bk){
+//                        if(bk)
+//                            console.log("ok");
+//                    });
+//                }
+                ep.emit('extract-page-list',book);
             }
+        }else{
+            //该链接没有抽取成功,将该链接保存到日志
+            saveLog(infoPage,"extract-page-fail");
+            //return null;
+            ep.emit('extract-page-list',book);
         }
+
     });
 }
 
@@ -193,13 +249,38 @@ function download(url,cb){
  * 保存数据到book 表
  * @param book
  */
-function saveData(params){
-    book.Save(params,function(bks){
-        if(!bks)
-            saveLog(err,'db');
-        else
-            console.log("ok!");
-    });
+function saveData(params,handler){
+
+    if(params instanceof Array){
+
+        bookDao.BulkSave(params,function(results){
+            if(results || results !== null){
+                //console.log("ok!");
+                handler(results);
+            }else{
+                saveLog("fail save:====start"+params.length,"db-insert-fail");
+                //console.log("fail! please see log");
+                params.forEach(function(item){
+                    saveLog("fail save:"+item.bookname,"db-insert-fail");
+                });
+                saveLog("fail save:====end"+params.length,"db-insert-fail");
+                handler(results);
+            }
+        });
+
+    }else{
+        bookDao.Save(params,function(result){
+            if(result){
+                //console.log("ok!");
+                handler(result);
+            }else{
+                //console.log("fail! please see log");
+                saveLog("fail save:"+params.bookname,"db-insert-fail");
+                handler(result);
+            }
+        });
+    }
+
 }
 
 
@@ -211,4 +292,19 @@ function saveData(params){
 function saveLog(logMsg,type){
     //记录到文件
     fs.appendFile(type+'.log',new Date().getTime()+' '+logMsg+'\r\n','utf-8');
+}
+
+
+/**
+ * 打印信息
+ * @param params
+ */
+function printdb(params){
+    if(params instanceof Array){
+        params.forEach(function(item){
+            console.log("name:"+item.bookname+" isbn:"+item.isbn);
+        });
+    }else{
+        console.log("name:"+params.bookname+" isbn:"+params.isbn);
+    }
 }

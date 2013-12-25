@@ -2,6 +2,7 @@
  * 数据库模块
  */
 var config = require("../config/config");
+var EventProxy = require('eventproxy');
 
 //var options = {
 //    'host': config.dbhost,
@@ -58,7 +59,7 @@ exports.execQuery = function(options) {
                 handler(results);
             });
 
-            console.log(query.sql);
+            //console.log(query.sql);
         } else {
             var query = connection.query(sql, args, function(error, results) {
                 if(error) {
@@ -70,7 +71,7 @@ exports.execQuery = function(options) {
                 handler(results);
             });
 
-            console.log(query.sql);
+            //console.log(query.sql);
         }
 
         // 返回连接池
@@ -81,4 +82,4 @@ exports.execQuery = function(options) {
             }
         });
     });
-};
+}

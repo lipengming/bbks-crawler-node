@@ -1,5 +1,5 @@
 {
-  "name": "micro-crawler",
+  "name": "bbk-crawler-node",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -9,6 +9,7 @@
     "cheerio": "*",
     "iconv-lite":"*",
     "bufferhelper":"*",
-    "mysql":"2.0.0-alpha9"
+    "mysql":"2.0.0-alpha9",
+    "eventproxy":"0.2.3"
   }
 }

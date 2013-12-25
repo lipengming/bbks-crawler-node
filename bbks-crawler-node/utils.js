@@ -14,6 +14,9 @@
  * @returns {Number}
  */
 exports.parseNumber = function parseNumber(str){
-    return parseInt(str.replace(/\D/g,"")) + 1;
+    if(str){
+        return parseInt(str.replace(/\D/g,"")) + 1;
+    }else{
+        return 0;
+    }
 }
-
