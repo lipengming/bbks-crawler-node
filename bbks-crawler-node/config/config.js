@@ -26,6 +26,4 @@ module.exports = {
         'supportBigNumbers': true,
         'bigNumberStrings': true
     }
-
-
 };
