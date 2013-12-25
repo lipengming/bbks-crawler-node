@@ -116,6 +116,8 @@ function  crawlerList(catlogpage){
        //当该页的数据抓取并入库之后，进行下一页的操作
        ep.after("extract-page-list",doc.length,function(books){
 
+           console.log("--->"+books.length);
+
            if(books.length === 0){
 
                goNext($);
