@@ -21,6 +21,7 @@ var detail = "http://item.jd.com/16035246.html";
 ////////////////////
 
 var catlog   = [];
+var doTag = 1;//继续执行的标志
 var ep = new EventProxy();
 
 ////////////////////
@@ -61,27 +62,27 @@ function crawlerCatlog(startUrl){
                 var this_catlog = $(this).find('a').html(); //分类
                 var this_link = $(this).find('a').attr('href'); //链接
 
-                catlog.push({
-                    catlog:this_catlog,
-                    link:this_link
-                });
+                if(utils.isString(this_catlog) && utils.isString(this_link)){
+                    catlog.push({
+                        catlog:this_catlog,
+                        link:this_link
+                    });
+                }
 
             });
 
         });
 
-
         ep.tail("classfy-end",function(){
             //从catlog中取出一则，调下一个类型抓取流程
-            //console.log("next catlog...............");
-            crawlerList(catlog.pop().link);
+            crawlerList(catlog.pop());
         });
 
         //延迟3s
         setTimeout(function(){
             console.log(catlog.length);
             //首次启动
-            crawlerList(catlog.pop().link);
+            crawlerList(catlog.pop());
         }, 3000);//延时3秒
 
     });
@@ -92,13 +93,19 @@ function crawlerCatlog(startUrl){
  * 抓取list页面
  * 1、抓取当前页面的书籍
  * 2、跳到下一页，继续抓取
- * @param catlog
+ * @param catlogpage
  */
 function  crawlerList(catlogpage){
+    if(!utils.isString(catlogpage.link)){
+        ep.emit("classfy-end");
+        return;
+    }
 
-    console.log("current catlog......"+catlogpage);
+    var mlink = catlogpage.link;
+    var mcatlog = catlogpage.catlog;
+
    //抓取当前页面
-   download(catlogpage,function(err,data){
+   download(mlink,function(err,data){
        var $ = cheerio.load(data);
        //抽取本页数据
        var doc = $("#plist").find(".item");
@@ -107,7 +114,7 @@ function  crawlerList(catlogpage){
            var link = $(this).find(".info .p-name").find("a").attr('href');
            if(link){
                //解析数据信息，并且入库
-               extract(link);
+               extract(link,mcatlog);
            }
            //不在此处触发了。。。
            //ep.emit('extract-page-list');
@@ -116,11 +123,11 @@ function  crawlerList(catlogpage){
        //当该页的数据抓取并入库之后，进行下一页的操作
        ep.after("extract-page-list",doc.length,function(books){
 
-           console.log("--->"+books.length);
+           console.log(mcatlog+":"+mlink+"--->"+books.length);
 
            if(books.length === 0){
 
-               goNext($);
+               goNext($,mcatlog);
 
            }else{
 
@@ -132,11 +139,11 @@ function  crawlerList(catlogpage){
                //！！！！！！！！！！！！批量 ！！！！！！！
                saveData(books,function(results){
 
-                   //hand the result!!!TODO
+                   //hand the result!!
                    //触发事件--》翻页
                    //go-next-page
                    //console.log("不该执行。。。。");
-                   goNext($);
+                   goNext($,mcatlog);
                });
                //！！！！！！！！！！！！批量 ！！！！！！！
                //！！！！！！！！！！！！批量 ！！！！！！！
@@ -155,18 +162,25 @@ function  crawlerList(catlogpage){
  * 翻下一页
  * @param doc
  */
-function goNext(doc){
-
+function goNext(doc,mcatlog){
+    if(!doc){
+        //发射结束事件
+        ep.emit("classfy-end");
+    }
     //2判断：是否有下一页的链接
     var pnext = doc("#filter .fore1 .pagin").find(".next");
     if(pnext){
         //存在下一页信息
         //递归调用该函数
         var next = pnext.attr("href");
-        if(next){
-            crawlerList(next);
-        }else{
-            //console.log("this catlog ended...............");
+        var nextCat = {
+            link:next,
+            catlog:mcatlog
+        }
+        if(utils.isObj(nextCat) && utils.isString(nextCat.link)){
+            crawlerList(nextCat);
+        }
+        else{
             //发射结束事件
             ep.emit("classfy-end");
         }
@@ -176,10 +190,11 @@ function goNext(doc){
 /**
  * 数据详细页面
  * @param infoPage
+ * @param catlog
  */
-function extract(infoPage){
+function extract(link,catlog){
 
-    download(infoPage,function(err,data){
+    download(link,function(err,data){
 
         var book = {};
         if(!err){
@@ -188,15 +203,19 @@ function extract(infoPage){
             var base = $("#product-intro");
             if(base){
                 //提取详细数据
-                book.url = infoPage;
-                book.bookname = base.find("#name h1").text().substr(0,45);
+                book.url = link.substr(0,45);  //链接
+                book.cat_log = catlog.substr(0,45);  //类型
+                book.bookname = base.find("#name h1").text().substr(0,250);
 
-                base = base.find(".clearfix");
                 book.cover_pic  = base.find("#preview #spec-n1 img").attr("src");//
-                book.author  = base.find("#summary-author .dd a").text().substr(0,100);//
-                book.isbn  = base.find("#summary-isbn .dd").text().substr(0,2000); //
-                book.press = base.find("#summary-ph .dd a").text().substr(0,255); //
-                book.price = utils.parseNumber(base.find("#summary-price .dd strong").text().substr(1));
+
+                var detail = base.find(".clearfix");
+
+                book.author  = detail.find("#summary-author .dd a").text().substr(0,45);//
+                book.isbn  = detail.find("#summary-isbn .dd").text().substr(0,18); //
+                book.press = detail.find("#summary-ph .dd a").text().substr(0,45); //
+                book.price = detail.find("#summary-price .dd strong").text().substr(0,8);
+
                 book.outline  = $("#product-detail .sub-m .sub-mc .con").text().substr(0,2000);
 
                 //非批量！！！！！！！！
@@ -212,7 +231,7 @@ function extract(infoPage){
             }
         }else{
             //该链接没有抽取成功,将该链接保存到日志
-            saveLog(infoPage,"extract-page-fail");
+            saveLog(link,"extract-page-fail");
             //return null;
             ep.emit('extract-page-list',book);
         }
@@ -309,4 +328,15 @@ function printdb(params){
     }else{
         console.log("name:"+params.bookname+" isbn:"+params.isbn);
     }
+}
+/**
+ *检查
+ * @param catlogUrl
+ */
+function checkType(catlogUrl){
+    if(catlogUrl==null||typeof(catlogUrl)=='undefined')
+        return false;
+    if( (typeof catlogUrl.link =="string") && (catlogUrl.link.constructor == String) && (typeof catlogUrl.catlog =="string") && (catlogUrl.catlog.constructor == String))
+        return true;
+    return false;
 }
